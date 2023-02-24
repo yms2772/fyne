@@ -31,6 +31,17 @@ type Dialog interface {
 	MinSize() fyne.Size
 }
 
+// DialogWithoutButton is the common API for any dialog window without any button
+type DialogWithoutButton interface {
+	Show()
+	Hide()
+	Refresh()
+	Resize(size fyne.Size)
+
+	// Since: 2.1
+	MinSize() fyne.Size
+}
+
 // Declare conformity to Dialog interface
 var _ Dialog = (*dialog)(nil)
 
@@ -48,6 +59,21 @@ type dialog struct {
 	layout         *dialogLayout
 }
 
+// Declare conformity to DialogWithoutButton interface
+var _ DialogWithoutButton = (*dialogWithoutButton)(nil)
+
+type dialogWithoutButton struct {
+	title       string
+	icon        fyne.Resource
+	desiredSize fyne.Size
+
+	win            *widget.PopUp
+	bg             *themedBackground
+	content, label fyne.CanvasObject
+	parent         fyne.Window
+	layout         *dialogWithoutButtonLayout
+}
+
 // NewCustom creates and returns a dialog over the specified application using custom
 // content. The button will have the dismiss text set.
 // The MinSize() of the CanvasObject passed will be used to set the size of the window.
@@ -59,6 +85,18 @@ func NewCustom(title, dismiss string, content fyne.CanvasObject, parent fyne.Win
 		OnTapped: d.Hide,
 	}
 	d.create(container.NewHBox(layout.NewSpacer(), d.dismiss, layout.NewSpacer()))
+
+	return d
+}
+
+// NewCustomWithoutButton creates and returns a dialog over the specified application using custom
+// content. The button will not be generated.
+// The MinSize() of the CanvasObject passed will be used to set the size of the window.
+func NewCustomWithoutButton(title string, content fyne.CanvasObject, parent fyne.Window) DialogWithoutButton {
+	d := &dialogWithoutButton{content: content, title: title, icon: nil, parent: parent}
+	d.layout = &dialogWithoutButtonLayout{d: d}
+
+	d.createWithoutButton()
 
 	return d
 }
@@ -173,6 +211,49 @@ func (d *dialog) create(buttons fyne.CanvasObject) {
 	d.Refresh()
 }
 
+func (d *dialogWithoutButton) Show() {
+	if !d.desiredSize.IsZero() {
+		d.win.Resize(d.desiredSize)
+	}
+	d.win.Show()
+}
+
+func (d *dialogWithoutButton) Hide() {
+	d.win.Hide()
+}
+
+func (d *dialogWithoutButton) Refresh() {
+	d.win.Refresh()
+}
+
+// Resize dialog, call this function after dialog show
+func (d *dialogWithoutButton) Resize(size fyne.Size) {
+	d.desiredSize = size
+	d.win.Resize(size)
+}
+
+// MinSize returns the size that this dialog should not shrink below
+//
+// Since: 2.1
+func (d *dialogWithoutButton) MinSize() fyne.Size {
+	return d.win.MinSize()
+}
+
+func (d *dialogWithoutButton) createWithoutButton() {
+	d.bg = newThemedBackground()
+	d.label = widget.NewLabelWithStyle(d.title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+
+	content := container.New(d.layout,
+		&canvas.Image{Resource: d.icon},
+		d.bg,
+		d.content,
+		d.label,
+	)
+
+	d.win = widget.NewModalPopUp(content, d.parent.Canvas())
+	d.Refresh()
+}
+
 // The method .create() needs to be called before the dialog cna be shown.
 func newDialog(title, message string, icon fyne.Resource, callback func(bool), parent fyne.Window) *dialog {
 	d := &dialog{content: newLabel(message), title: title, icon: icon, parent: parent}
@@ -278,6 +359,35 @@ func (l *dialogLayout) MinSize(obj []fyne.CanvasObject) fyne.Size {
 
 	width := fyne.Max(fyne.Max(contentMin.Width, btnMin.Width), obj[4].MinSize().Width) + padWidth
 	height := contentMin.Height + btnMin.Height + l.d.label.MinSize().Height + theme.Padding() + padHeight*2
+
+	return fyne.NewSize(width, height)
+}
+
+type dialogWithoutButtonLayout struct {
+	d *dialogWithoutButton
+}
+
+func (l *dialogWithoutButtonLayout) Layout(obj []fyne.CanvasObject, size fyne.Size) {
+	l.d.bg.Move(fyne.NewPos(0, 0))
+	l.d.bg.Resize(size)
+
+	// icon
+	iconHeight := padHeight*2 + l.d.label.MinSize().Height*2 - theme.Padding()
+	obj[0].Resize(fyne.NewSize(iconHeight, iconHeight))
+	obj[0].Move(fyne.NewPos(size.Width-iconHeight+theme.Padding(), -theme.Padding()))
+
+	// content
+	contentStart := l.d.label.Position().Y + l.d.label.MinSize().Height
+	contentEnd := obj[2].Position().Y + theme.Padding()
+	obj[2].Move(fyne.NewPos(padWidth/2, l.d.label.MinSize().Height+padHeight))
+	obj[2].Resize(fyne.NewSize(size.Width-padWidth, contentEnd-contentStart))
+}
+
+func (l *dialogWithoutButtonLayout) MinSize(obj []fyne.CanvasObject) fyne.Size {
+	contentMin := obj[2].MinSize()
+
+	width := fyne.Max(contentMin.Width, obj[3].MinSize().Width) + padWidth
+	height := contentMin.Height + l.d.label.MinSize().Height + theme.Padding() + padHeight*2
 
 	return fyne.NewSize(width, height)
 }

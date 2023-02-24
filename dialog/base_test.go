@@ -96,3 +96,25 @@ func TestCustom_ResizeOnShow(t *testing.T) {
 	assert.Equal(t, size, d.win.Size())
 	d.Hide()
 }
+
+func TestCustomWithoutButton_ResizeOnShow(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	w := test.NewWindow(canvas.NewRectangle(color.Transparent))
+	size := fyne.NewSize(200, 300)
+	w.Resize(size)
+
+	label := widget.NewLabel("Content")
+	label.Alignment = fyne.TextAlignCenter
+	d := NewCustomWithoutButton("Title", label, w).(*dialogWithoutButton)
+
+	d.Show()
+	assert.Equal(t, size, d.win.Size())
+	d.Hide()
+
+	size = fyne.NewSize(500, 500)
+	w.Resize(size)
+	d.Show()
+	assert.Equal(t, size, d.win.Size())
+	d.Hide()
+}
